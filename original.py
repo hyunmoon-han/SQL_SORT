@@ -1,5 +1,6 @@
 import re
 import sys
+#<회사 양식 SQL 정렬하는 프로그램>
 #SQL문 SELECT,WHERE,FROM,GRUOP BY ,HAVING ,ORDER BY 등으로 구분하여 저장
 def extract_sql_clauses(query: str):
 
