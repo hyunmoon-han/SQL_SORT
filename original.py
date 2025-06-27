@@ -49,7 +49,9 @@ def extract_sql_clauses(query: str):
         for i, subquery in enumerate(moon_test):
             placeholder = f"MOON_SUBQUERY{i}"
             if placeholder in clause:
-                clauses[key] = clause.replace(placeholder, subquery)
+                #clauses[key] = clause.replace(placeholder, subquery)
+                clause = clause.replace(placeholder, subquery) #20250627수정
+        clauses[key] = clause
     
     return clauses
 
