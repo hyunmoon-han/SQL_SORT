@@ -1,6 +1,5 @@
 import re
 import sys
-#<회사 양식 SQL 정렬하는 프로그램>
 #SQL문 SELECT,WHERE,FROM,GRUOP BY ,HAVING ,ORDER BY 등으로 구분하여 저장
 def extract_sql_clauses(query: str):
 
@@ -9,6 +8,7 @@ def extract_sql_clauses(query: str):
 
     #추가 : 기존 분할은 서브쿼리의 경우 분할시 정확한 매칭이 안됬는데, 서브쿼리를 치환하는 함수 사용하여 처리.
     query,moon_test = test_moon(query)
+
 
     #()안에 FROM 하나만 있을 경우 치환 -> 문장 구문 split시 from 절을 인식하는데 함수에 FROM절 예외처리.
     query = kk_test_from(query)
@@ -52,6 +52,8 @@ def extract_sql_clauses(query: str):
                 #clauses[key] = clause.replace(placeholder, subquery)
                 clause = clause.replace(placeholder, subquery) #20250627수정
         clauses[key] = clause
+
+                    
     
     return clauses
 
@@ -140,6 +142,7 @@ def format_select(clauses: dict, select_end_pos: int):
 
     #실행 순서 차일로 괄호안의 @치환작업 마지막으로 수정     
     #formatted_select=formatted_select.replace("@",' , ')
+    #formatted_select=formatted_select.replace(",",'@')
     return formatted_select
 
 
@@ -522,7 +525,7 @@ def replace_vactor(sql,cnt):
     #함수나 다른 괄호들 롤백
     formatted_case = formatted_case.replace('ㄱ', '(')
     formatted_case = formatted_case.replace('ㄴ', ')')
-    formatted_case = formatted_case.replace('@', ',')
+    #formatted_case = formatted_case.replace('@', ',')
 
 
     return formatted_case
@@ -539,7 +542,8 @@ def case_for_sorted(sql):
     #sql = replace_comma_in_parentheses(sql)
 
     #함수 인자값이 단일 값인 경우 치환용 함수.
-    sql = replace_parentheses_with_conditions(sql) 
+    sql = replace_parentheses_with_conditions(sql)
+    print('함수의 괄호는 무시하는 함수:',sql) 
 
     #추가 : 단순 () 사용하여 사칙연산 사용한 경우.(통합)
     sql = replace_parentheses_without_when_then(sql)
@@ -656,7 +660,7 @@ def replace_comma_in_parentheses(sql):
 
 #함수 인자값이 단일 값인 경우 치환용 함수.
 def replace_parentheses_with_conditions(sql):
-    simple_functions = ['SUM', 'MIN', 'MAX', 'COUNT', 'AVG', 'ABS', 'ROUND', 'LENGTH', 'TRIM','CAST']
+    simple_functions = ['SUM', 'MIN', 'MAX', 'COUNT', 'AVG', 'ABS', 'ROUND', 'LENGTH', 'TRIM','CAST','COALESCE','NVL','DATEADD','GETDATE']
     stack = []  # 여는 괄호 위치를 저장할 스택
     pairs = []  # 괄호 쌍을 저장할 리스트
     modified_sql = list(sql)  # 문자열을 리스트로 변환 (수정 용이)
@@ -928,6 +932,7 @@ def moon_gogo(sql_query):
 #처음 정렬은 하드코딩
     #최외각의 괄호를 제외한 내각의 괄호 치환(서브쿼리 치환)
     sql_query,A=test1(sql_query)
+    print('맨처음 작업 시작 서브쿼리 치환 : ',sql_query)
 
     #처음 실행하는 쿼리 정렬.
     first_select_location = find_first_position(sql_query,"SELECT")
@@ -950,9 +955,10 @@ def moon_gogo(sql_query):
     
     #남은 서브쿼리 반복문 실행
     for i in range(select_cnt):
-        
+        print('두 번째 들어가기 전 에러 체크 ')
         #최외각의 괄호를 제외한 내각의 괄호 치환(서브쿼리 치환)
         sql_query,A=test1(final_sql)
+        print('두 번째 작업 서브쿼리 치환:',sql_query)
 
         #치환된 서브쿼리를 정렬후 롤백
         final_sql,select_locatoin = process_subqueries(sql_query, A)
@@ -1227,13 +1233,29 @@ def last_start(sql_query):
             # CTE와 나머지 쿼리 결합
             final_sql = "\n".join([with_query, final_sql])
 
+
+            #추가: 공백 제거 (2025.07.23)
+            final_sql = re.sub(r'(["\'])(.*?)(\1)', lambda m: strip_paren_spaces(m), final_sql)
+            final_sql = re.sub(r'@@(.*?)@@', lambda m: f"@@{strip_paren_spaces(re.match(r'(.*)', m.group(1)))}@@", final_sql)
+            final_sql = re.sub(r'##(.*?)##', lambda m: f"##{strip_paren_spaces_plain(m.group(1))}##", final_sql)
+
         else:
             # CTE가 없으면 기존 쿼리 처리
             # UNION 유무 체크
             if re.search(r'\bUNION\b( ALL)?', sql_query, flags=re.IGNORECASE):            
                 final_sql = split_union_query(sql_query)
+                
+                #추가: 공백 제거 (2025.07.23)
+                final_sql = re.sub(r'(["\'])(.*?)(\1)', lambda m: strip_paren_spaces(m), final_sql)
+                final_sql = re.sub(r'@@(.*?)@@',lambda m: f"@@{strip_paren_spaces_plain(m.group(1))}@@",final_sql)
+                final_sql = re.sub(r'##(.*?)##', lambda m: f"##{strip_paren_spaces_plain(m.group(1))}##", final_sql)
             else :            
                 final_sql = moon_gogo(sql_query)
+
+                #추가: 공백 제거 (2025.07.23)
+                final_sql = re.sub(r'(["\'])(.*?)(\1)', lambda m: strip_paren_spaces(m), final_sql)
+                final_sql = re.sub(r'@@(.*?)@@',lambda m: f"@@{strip_paren_spaces_plain(m.group(1))}@@",final_sql)
+                final_sql = re.sub(r'##(.*?)##', lambda m: f"##{strip_paren_spaces_plain(m.group(1))}##", final_sql)
 
         # sql,commend = replace_comments2(final_sql)  
 
@@ -1241,6 +1263,11 @@ def last_start(sql_query):
         for i, comment in enumerate(commend):
            final_sql = final_sql.replace(f'/*commend_{i}*/',"/*"+comment+"*/")
            
+
+           #추가: 공백 제거 (2025.07.23)
+           final_sql = re.sub(r'(["\'])(.*?)(\1)', lambda m: strip_paren_spaces(m), final_sql)
+           final_sql = re.sub(r'@@(.*?)@@',lambda m: f"@@{strip_paren_spaces_plain(m.group(1))}@@",final_sql)
+           final_sql = re.sub(r'##(.*?)##', lambda m: f"##{strip_paren_spaces_plain(m.group(1))}##", final_sql)
         
 
 
@@ -1444,3 +1471,21 @@ def replace_comments2(sql):
     modified_text = re.sub(r"/\*.*?\*/", replace_comment, sql)
 
     return modified_text, replaced_comments
+#/*추가: SQL문 안에 문자열속 띄어쓰기 제거 -> st (A): st(A) (2024.07.23)*/
+def strip_paren_spaces(match):
+    quote = match.group(1)
+    inner = match.group(2)
+
+    # 괄호 앞뒤 공백 제거
+    inner_cleaned = re.sub(r'\s*\(\s*', '(', inner)
+    inner_cleaned = re.sub(r'\s*\)\s*', ')', inner_cleaned)
+    
+    return f"{quote}{inner_cleaned}{quote}"
+
+
+#추가 : SQL문 안에 @@ @@ 안의 문자열 중 () 공백 제거 (2024.07.23)
+def strip_paren_spaces_plain(text):
+    # 괄호 앞뒤 공백 제거
+    text = re.sub(r'\s*\(\s*', '(', text)
+    text = re.sub(r'\s*\)\s*', ')', text)
+    return text
